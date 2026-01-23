@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Guard Live Pro</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --primary-blue: #38bdf8;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #f87171;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+            color: white; margin: 0; padding: 20px; min-height: 100vh;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; }
+
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+
+        .status-badge {
+            background: var(--card-bg); padding: 8px 16px; border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; display: flex; align-items: center; gap: 8px;
+        }
+
+        .dot { height: 10px; width: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 10px var(--success); }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; }
+
+        .card {
+            background: var(--card-bg); backdrop-filter: blur(10px); padding: 25px;
+            border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease;
+        }
+
+        .label { color: #94a3b8; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+        .value { font-size: 3.2rem; font-weight: 600; margin: 10px 0; display: flex; align-items: baseline; gap: 8px; }
+        .unit { font-size: 1rem; color: #64748b; }
+
+        .indicator { padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; background: rgba(255,255,255,0.05); }
+
+        .chart-section {
+            background: var(--card-bg); margin-top: 30px; padding: 25px;
+            border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); height: 350px;
+        }
+
+        /* AQI Classes */
+        .good { color: var(--success); }
+        .alert { color: var(--warning); }
+        .critical { color: var(--danger); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1 style="margin:0;">Air Quality <span style="color: var(--primary-blue);">Monitoring</span></h1>
+            <p style="color: #64748b; margin: 0;">Monitoring Kualitas Udara Real-time</p>
+        </div>
+        <div class="status-badge">
+            <div id="connection-dot" class="dot"></div> <span id="connection-text">Menghubungkan...</span>
+        </div>
+    </header>
+
+    <div class="grid">
+        <div class="card">
+            <div class="label">Carbon Dioxide (CO2)</div>
+            <div id="co2-val" class="value">0 <span class="unit">PPM</span></div>
+            <div id="co2-status" class="indicator">Menunggu Data...</div>
+        </div>
+
+        <div class="card">
+            <div class="label">Particulate Matter (PM2.5)</div>
+            <div id="pm-val" class="value">0 <span class="unit">µg/m³</span></div>
+            <div id="pm-status" class="indicator">Menunggu Data...</div>
+        </div>
+    </div>
+
+    <div class="chart-section">
+        <canvas id="airChart"></canvas>
+    </div>
+</div>
+
+<script>
+    // --- 1. CONFIGURASI FIREBASE ---
+    // Ganti dengan data asli Anda dari Project Settings Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSy...", 
+        databaseURL: "https://air-quality-monitoring-97365-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        projectId: "air-quality-monitoring-97365",
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // --- 2. LOGIKA NOTIFIKASI ANTI-SPAM ---
+    let co2AlertSent = false;
+    let pm25AlertSent = false;
+
+    if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+
+    function triggerNotify(title, msg) {
+        if (Notification.permission === "granted") {
+            new Notification(title, {
+                body: msg,
+                icon: "https://cdn-icons-png.flaticon.com/512/1684/1684426.png"
+            });
+        }
+    }
+
+    // --- 3. CHART SETUP ---
+    const ctx = document.getElementById('airChart').getContext('2d');
+    const airChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'CO2', borderColor: '#38bdf8', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(56, 189, 248, 0.1)' },
+                { label: 'PM2.5', borderColor: '#fb923c', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(251, 146, 60, 0.1)' }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                x: { grid: { display: false }, ticks: { color: '#64748b' } }
+            },
+            plugins: { legend: { labels: { color: '#94a3b8' } } }
+        }
+    });
+
+    // --- 4. REAL-TIME DATA LISTENER ---
+    // Kita memantau path 'monitoring' (pastikan di Firebase sudah huruf kecil)
+    db.ref('monitoring').limitToLast(15).on('value', (snapshot) => {
+        if (snapshot.exists()) {
+            document.getElementById('connection-text').innerText = "Sistem Online";
+            const labels = [];
+            const co2Data = [];
+            const pmData = [];
+
+            snapshot.forEach((child) => {
+                const data = child.val();
+                
+                // Ambil waktu dari timestamp atau gunakan waktu sekarang jika tidak ada
+                const time = data.timestamp ? 
+                    new Date(Number(data.timestamp)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
+                    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                labels.push(time);
+                co2Data.push(data.co2 || 0);
+                pmData.push(data.pm25 || 0);
+
+                // Update UI Per Card
+                updateDisplay('co2', data.co2 || 0);
+                updateDisplay('pm', data.pm25 || 0);
+
+                // Cek Notifikasi
+                handleAlerts(data.co2 || 0, data.pm25 || 0);
+            });
+
+            airChart.data.labels = labels;
+            airChart.data.datasets[0].data = co2Data;
+            airChart.data.datasets[1].data = pmData;
+            airChart.update();
+        }
+    });
+
+    function updateDisplay(type, val) {
+        const valEl = document.getElementById(type + '-val');
+        const statusEl = document.getElementById(type + '-status');
+        
+        if (type === 'co2') {
+            valEl.innerHTML = `${val} <span class="unit">PPM</span>`;
+            if (val < 1000) { valEl.className = "value good"; statusEl.innerText = "SEHAT"; }
+            else if (val < 1500) { valEl.className = "value alert"; statusEl.innerText = "WASPADA"; }
+            else { valEl.className = "value critical"; statusEl.innerText = "BAHAYA"; }
+        } else {
+            valEl.innerHTML = `${val} <span class="unit">µg/m³</span>`;
+            if (val < 12) { valEl.className = "value good"; statusEl.innerText = "BERSIH"; }
+            else if (val < 35) { valEl.className = "value alert"; statusEl.innerText = "SEDANG"; }
+            else { valEl.className = "value critical"; statusEl.innerText = "BURUK"; }
+        }
+    }
+
+    function handleAlerts(co2, pm) {
+        if (co2 > 1200 && !co2AlertSent) {
+            triggerNotify("⚠️ Bahaya CO2!", `Kadar CO2 tinggi: ${co2} PPM.`);
+            co2AlertSent = true;
+        } else if (co2 <= 1000) { co2AlertSent = false; }
+
+        if (pm > 35 && !pm25AlertSent) {
+            triggerNotify("😷 Polusi Udara!", `Kadar PM2.5 buruk: ${pm} µg/m³.`);
+            pm25AlertSent = true;
+        } else if (pm <= 30) { pm25AlertSent = false; }
+    }
+</script>
+</body>
+</html>
