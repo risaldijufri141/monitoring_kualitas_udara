@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f172a">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>AirGuard Pro - Dashboard App</title>
+    <title>AirGuard Pro App</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -26,43 +25,37 @@
 
         /* App Header */
         .app-header {
-            position: sticky; top: 0; background: rgba(15, 23, 42, 0.9);
+            position: sticky; top: 0; background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(15px); padding: 15px 20px; display: flex;
             justify-content: space-between; align-items: center; z-index: 100;
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         .brand { font-weight: 700; font-size: 1.1rem; }
         .brand span { color: var(--primary); }
-        .live-indicator { font-size: 0.65rem; display: flex; align-items: center; gap: 5px; opacity: 0.8; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: #64748b; }
-        .dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .live-indicator { font-size: 0.65rem; display: flex; align-items: center; gap: 5px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+        .dot.active { background: var(--success); box-shadow: 0 0 10px var(--success); }
+        .dot.offline { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 
-        /* Main App Content */
+        /* Container */
         .app-container { padding: 15px; padding-bottom: 100px; }
-
         .app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        
         .app-card {
             background: var(--card); border-radius: 20px; padding: 18px;
-            border: 1px solid rgba(255,255,255,0.1); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255,255,255,0.1); transition: all 0.5s ease;
         }
         .card-label { opacity: 0.5; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-        .card-value { font-size: 1.6rem; font-weight: 700; margin: 5px 0; transition: 0.3s; }
+        .card-value { font-size: 1.6rem; font-weight: 700; margin: 5px 0; }
         .card-unit { font-size: 0.75rem; opacity: 0.4; font-weight: 400; }
         .status-tag { font-size: 0.6rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,0.05); }
 
-        /* Kategori Colors */
-        .state-safe { color: var(--success); }
-        .state-warn { color: var(--warning); }
+        /* Animation for Danger */
         .state-danger { color: var(--danger); animation: pulse 1s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
-        /* Chart Section */
-        .chart-section {
-            background: var(--card); border-radius: 24px; padding: 15px;
-            height: 380px; border: 1px solid rgba(255,255,255,0.1);
-        }
-        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px; }
-        .chart-title { font-size: 0.8rem; font-weight: 600; opacity: 0.7; }
+        /* Chart */
+        .chart-section { background: var(--card); border-radius: 24px; padding: 15px; height: 380px; border: 1px solid rgba(255,255,255,0.1); }
 
         /* Bottom Nav */
         .bottom-nav {
@@ -70,14 +63,13 @@
             background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(20px);
             height: 65px; border-radius: 22px; display: flex;
             justify-content: space-around; align-items: center;
-            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 1000;
+            border: 1px solid rgba(255,255,255,0.1); z-index: 1000;
         }
-        .nav-item { background: none; border: none; color: white; opacity: 0.4; font-size: 0.65rem; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .nav-item.active { opacity: 1; color: var(--primary); }
+        .nav-item { background: none; border: none; color: white; opacity: 0.4; font-size: 0.65rem; display: flex; flex-direction: column; align-items: center; }
         .export-btn {
             background: var(--primary); color: var(--bg); width: 50px; height: 50px;
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            margin-top: -35px; border: 4px solid var(--bg); font-size: 1.4rem; box-shadow: 0 5px 15px rgba(56,189,248,0.3);
+            margin-top: -35px; border: 4px solid var(--bg); font-size: 1.4rem;
         }
     </style>
 </head>
@@ -86,15 +78,15 @@
     <header class="app-header">
         <div class="brand">AirGuard <span>Pro</span></div>
         <div class="live-indicator">
-            <div id="active-dot" class="dot"></div>
-            <span id="active-text">Menghubungkan...</span>
+            <div id="status-dot" class="dot"></div>
+            <span id="status-text">Menghubungkan...</span>
         </div>
     </header>
 
     <main class="app-container">
         <div class="app-grid">
             <div class="app-card" id="card-co2">
-                <div class="card-label">CO2 Level</div>
+                <div class="card-label">Kadar CO2</div>
                 <div id="co2-val" class="card-value">0 <span class="card-unit">PPM</span></div>
                 <div id="co2-st" class="status-tag">OFFLINE</div>
             </div>
@@ -106,21 +98,17 @@
         </div>
 
         <div class="chart-section">
-            <div class="chart-header">
-                <div class="chart-title">Analisis Detail (Real-time)</div>
-            </div>
-            <div style="height: 320px;"><canvas id="detailChart"></canvas></div>
+            <div style="height: 350px;"><canvas id="mainChart"></canvas></div>
         </div>
     </main>
 
     <nav class="bottom-nav">
-        <button class="nav-item active"><span>📊</span>Monitor</button>
+        <button class="nav-item" style="opacity:1; color:var(--primary)">📊<br>Monitor</button>
         <button class="export-btn" onclick="exportToExcel()">📥</button>
-        <button class="nav-item" onclick="window.location.reload()"><span>🔄</span>Reload</button>
+        <button class="nav-item" onclick="window.location.reload()">🔄<br>Reload</button>
     </nav>
 
 <script>
-    // --- Konfigurasi Firebase ---
     const firebaseConfig = {
         apiKey: "AIzaSyAeNo2FiRyRsYkt3yNlaoTjKYehA8KDiV8",
         databaseURL: "https://air-quality-monitoring-97365-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -130,34 +118,36 @@
     const db = firebase.database();
 
     let chart;
-    let excelData = [];
-    let lastPulse = Date.now();
+    let excelBuffer = [];
+    let lastTime = Date.now();
+    let isOffline = true;
 
     function init() {
-        initDetailedChart();
+        initChart();
         
         db.ref('monitoring').on('value', snap => {
             if(!snap.exists()) return;
-            lastPulse = Date.now();
-            updateStatus(true);
+            lastTime = Date.now();
+            isOffline = false;
+            updateStatusUI(true);
             
             let labels = [], co2s = [], pms = [];
-            excelData = [];
+            excelBuffer = [];
 
             snap.forEach(child => {
                 const d = child.val();
                 const now = new Date();
-                const timeStr = now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+                const ts = now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
                 
-                labels.push(timeStr);
+                labels.push(ts);
                 co2s.push(d.co2);
                 pms.push(d.pm25);
 
                 const cat = getCat(d.co2, d.pm25);
-                excelData.push({
+                excelBuffer.push({
                     "Waktu": now.toLocaleString(),
-                    "CO2 (PPM)": Math.round(d.co2),
-                    "PM2.5 (ug/m3)": Math.round(d.pm25),
+                    "CO2": Math.round(d.co2),
+                    "PM2.5": Math.round(d.pm25),
                     "Status": cat.text
                 });
 
@@ -165,42 +155,46 @@
                 updateCard('pm', d.pm25);
             });
 
-            chart.data.labels = labels.slice(-20);
-            chart.data.datasets[0].data = co2s.slice(-20);
-            chart.data.datasets[1].data = pms.slice(-20);
+            chart.data.labels = labels.slice(-15);
+            chart.data.datasets[0].data = co2s.slice(-15);
+            chart.data.datasets[1].data = pms.slice(-15);
             chart.update();
         });
     }
 
-    function initDetailedChart() {
-        const ctx = document.getElementById('detailChart').getContext('2d');
-        const g1 = ctx.createLinearGradient(0, 0, 0, 300);
-        g1.addColorStop(0, 'rgba(56, 189, 248, 0.3)'); g1.addColorStop(1, 'transparent');
-        const g2 = ctx.createLinearGradient(0, 0, 0, 300);
-        g2.addColorStop(0, 'rgba(251, 146, 60, 0.3)'); g2.addColorStop(1, 'transparent');
+    // FUNGSI AUTO-RESET (PENTING)
+    setInterval(() => {
+        if (!isOffline && (Date.now() - lastTime > 15000)) {
+            resetToZero();
+        }
+    }, 5000);
 
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: { labels: [], datasets: [
-                { label: 'CO2', borderColor: '#38bdf8', data: [], tension: 0.4, fill: true, backgroundColor: g1, yAxisID: 'y', pointRadius: 0 },
-                { label: 'PM2.5', borderColor: '#fb923c', data: [], tension: 0.4, fill: true, backgroundColor: g2, yAxisID: 'y1', pointRadius: 0 }
-            ]},
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { position: 'left', grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' }, min: 400, max: 2000 },
-                    y1: { position: 'right', grid: { display: false }, ticks: { color: '#64748b' }, min: 0, max: 100 },
-                    x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 6 } }
-                }
-            }
-        });
+    function resetToZero() {
+        isOffline = true;
+        updateStatusUI(false);
+        
+        // Reset angka ke 0
+        document.getElementById('co2-val').innerHTML = `0 <span class="card-unit">PPM</span>`;
+        document.getElementById('pm-val').innerHTML = `0 <span class="card-unit">µg</span>`;
+        
+        // Reset status dan warna
+        document.getElementById('co2-st').innerText = "OFFLINE";
+        document.getElementById('pm-st').innerText = "OFFLINE";
+        document.getElementById('co2-val').className = "card-value";
+        document.getElementById('pm-val').className = "card-value";
+        document.getElementById('card-co2').style.background = "rgba(30, 41, 59, 0.7)";
+        document.getElementById('card-pm').style.background = "rgba(30, 41, 59, 0.7)";
+    }
+
+    function updateStatusUI(online) {
+        document.getElementById('status-dot').className = online ? 'dot active' : 'dot offline';
+        document.getElementById('status-text').innerText = online ? 'Live Monitoring' : 'Alat Terputus';
     }
 
     function getCat(co2, pm) {
-        if (co2 > 1200 || pm > 35) return { text: "BAHAYA", cls: "state-danger", bg: "rgba(248, 113, 113, 0.1)" };
-        if (co2 > 800 || pm > 15) return { text: "WASPADA", cls: "state-warn", bg: "rgba(251, 191, 36, 0.1)" };
-        return { text: "AMAN", cls: "state-safe", bg: "rgba(74, 222, 128, 0.1)" };
+        if (co2 > 1200 || pm > 35) return { text: "BAHAYA", cls: "state-danger", bg: "rgba(248, 113, 113, 0.15)" };
+        if (co2 > 800 || pm > 15) return { text: "WASPADA", cls: "state-warn", bg: "rgba(251, 191, 36, 0.15)" };
+        return { text: "AMAN", cls: "state-safe", bg: "rgba(74, 222, 128, 0.15)" };
     }
 
     function updateCard(type, val) {
@@ -216,19 +210,32 @@
         cardEl.style.background = cat.bg;
     }
 
-    function updateStatus(isOnline) {
-        document.getElementById('active-dot').className = isOnline ? 'dot active' : 'dot';
-        document.getElementById('active-text').innerText = isOnline ? 'Live Monitoring' : 'Alat Offline';
+    function initChart() {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'CO2', borderColor: '#38bdf8', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(56,189,248,0.05)', yAxisID: 'y', pointRadius: 0 },
+                { label: 'PM2.5', borderColor: '#fb923c', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(251,146,60,0.05)', yAxisID: 'y1', pointRadius: 0 }
+            ]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { position: 'left', ticks: { color: '#64748b' }, min: 400, max: 2000 },
+                    y1: { position: 'right', grid: { display: false }, ticks: { color: '#64748b' }, min: 0, max: 100 },
+                    x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 6 } }
+                }
+            }
+        });
     }
 
-    setInterval(() => { if(Date.now() - lastPulse > 15000) updateStatus(false); }, 5000);
-
     function exportToExcel() {
-        if(excelData.length === 0) return alert("Belum ada data.");
-        const ws = XLSX.utils.json_to_sheet(excelData);
+        if(excelBuffer.length === 0) return alert("Data kosong");
+        const ws = XLSX.utils.json_to_sheet(excelBuffer);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Data");
-        XLSX.writeFile(wb, `AirGuard_Laporan_${new Date().toLocaleDateString()}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "Laporan");
+        XLSX.writeFile(wb, `AirGuard_Report_${new Date().toLocaleDateString()}.xlsx`);
     }
 
     init();
