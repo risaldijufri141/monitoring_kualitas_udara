@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Air Guard Live Pro</title>
+    <title>Air Guard Pro - Realtime Dashboard</title>
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     
     <style>
@@ -15,15 +17,15 @@
             --card-bg: rgba(255, 255, 255, 0.05);
             --primary-blue: #38bdf8;
             --success: #4ade80;
-            --warning: #fbbf24;
             --danger: #f87171;
+            --text-muted: #94a3b8;
         }
 
         body {
             font-family: 'Poppins', sans-serif;
             background-color: var(--bg-color);
             background-image: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
-            color: white; margin: 0; padding: 20px; min-height: 100vh;
+            color: white; margin: 0; min-height: 100vh; padding: 20px;
         }
 
         .container { max-width: 1000px; margin: 0 auto; }
@@ -32,182 +34,223 @@
 
         .status-badge {
             background: var(--card-bg); padding: 8px 16px; border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; display: flex; align-items: center; gap: 8px;
+            font-size: 0.8rem; display: flex; align-items: center; gap: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
         }
-
-        .dot { height: 10px; width: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 10px var(--success); }
+        .dot { height: 10px; width: 10px; border-radius: 50%; transition: 0.3s; }
+        .dot-online { background: var(--success); box-shadow: 0 0 10px var(--success); }
+        .dot-offline { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; }
+        .card { background: var(--card-bg); padding: 25px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
+        .value { font-size: 3.5rem; font-weight: 600; margin: 10px 0; }
+        .unit { font-size: 1.2rem; color: var(--text-muted); }
 
-        .card {
-            background: var(--card-bg); backdrop-filter: blur(10px); padding: 25px;
-            border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease;
+        .btn-excel { 
+            background: var(--success); color: #0f172a; padding: 12px 24px; 
+            border-radius: 12px; border: none; font-weight: 600; cursor: pointer;
+            transition: 0.3s; display: flex; align-items: center; gap: 8px;
         }
+        .btn-excel:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3); }
 
-        .label { color: #94a3b8; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-        .value { font-size: 3.2rem; font-weight: 600; margin: 10px 0; display: flex; align-items: baseline; gap: 8px; }
-        .unit { font-size: 1rem; color: #64748b; }
-
-        .indicator { padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; background: rgba(255,255,255,0.05); }
-
-        .chart-section {
-            background: var(--card-bg); margin-top: 30px; padding: 25px;
-            border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); height: 350px;
-        }
-
-        /* AQI Classes */
+        .chart-section { background: var(--card-bg); margin-top: 30px; padding: 25px; border-radius: 24px; height: 380px; border: 1px solid rgba(255,255,255,0.05); }
+        
         .good { color: var(--success); }
-        .alert { color: var(--warning); }
         .critical { color: var(--danger); }
+        .offline-text { opacity: 0.2; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <header>
-        <div>
-            <h1 style="margin:0;">Air Quality <span style="color: var(--primary-blue);">Monitoring</span></h1>
-            <p style="color: #64748b; margin: 0;">Monitoring Kualitas Udara Real-time</p>
-        </div>
-        <div class="status-badge">
-            <div id="connection-dot" class="dot"></div> <span id="connection-text">Menghubungkan...</span>
-        </div>
-    </header>
+    <div class="container">
+        <header>
+            <div>
+                <h1 style="margin:0; letter-spacing: -1px;">Air Monitoring <span style="color: var(--primary-blue);">System</span></h1>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
+                    <div id="conn-dot" class="dot dot-offline"></div>
+                    <span id="conn-text" style="color: var(--text-muted); font-size: 0.85rem;">Menghubungkan Database...</span>
+                </div>
+            </div>
+            <button class="btn-excel" onclick="exportToExcel()">
+                <span>📊</span> Cetak Laporan Excel
+            </button>
+        </header>
 
-    <div class="grid">
-        <div class="card">
-            <div class="label">Carbon Dioxide (CO2)</div>
-            <div id="co2-val" class="value">0 <span class="unit">PPM</span></div>
-            <div id="co2-status" class="indicator">Menunggu Data...</div>
+        <div class="grid">
+            <div class="card">
+                <div style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">KADAR CO2</div>
+                <div id="co2-val" class="value">0 <span class="unit">PPM</span></div>
+                <div id="co2-status" style="font-weight: bold; font-size: 0.9rem;">MENUNGGU DATA</div>
+            </div>
+            <div class="card">
+                <div style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">DEBU (PM2.5)</div>
+                <div id="pm-val" class="value">0 <span class="unit">µg/m³</span></div>
+                <div id="pm-status" style="font-weight: bold; font-size: 0.9rem;">MENUNGGU DATA</div>
+            </div>
         </div>
 
-        <div class="card">
-            <div class="label">Particulate Matter (PM2.5)</div>
-            <div id="pm-val" class="value">0 <span class="unit">µg/m³</span></div>
-            <div id="pm-status" class="indicator">Menunggu Data...</div>
+        <div class="chart-section">
+            <canvas id="airChart"></canvas>
         </div>
     </div>
-
-    <div class="chart-section">
-        <canvas id="airChart"></canvas>
-    </div>
-</div>
 
 <script>
-    // --- 1. CONFIGURASI FIREBASE ---
-    // Ganti dengan data asli Anda dari Project Settings Firebase
+    // --- KONFIGURASI FIREBASE ANDA ---
     const firebaseConfig = {
-        apiKey: "AIzaSy...", 
-        databaseURL: "https://air-quality-monitoring-97365-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        apiKey: "AIzaSyAeNo2FiRyRsYkt3yNlaoTjKYehA8KDiV8",
+        authDomain: "air-quality-monitoring-97365.firebaseapp.com",
+        databaseURL: "https://air-quality-monitoring-97365-default-rtdb.asia-southeast1.firebasedatabase.app",
         projectId: "air-quality-monitoring-97365",
+        storageBucket: "air-quality-monitoring-97365.firebasestorage.app",
+        messagingSenderId: "590239845593",
+        appId: "1:590239845593:web:3ed3af84a5d260afbc02c8",
+        measurementId: "G-JRT6KTCJ4J"
     };
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // --- 2. LOGIKA NOTIFIKASI ANTI-SPAM ---
-    let co2AlertSent = false;
-    let pm25AlertSent = false;
+    let chart;
+    let excelBuffer = [];
+    let lastActive = Date.now();
+    let isSystemDown = true;
 
-    if (Notification.permission !== "granted") {
-        Notification.requestPermission();
+    // --- DETEKSI OFFLINE (Auto-Zero jika 15 detik tidak ada data) ---
+    setInterval(() => {
+        if (!isSystemDown && (Date.now() - lastActive > 15000)) {
+            triggerOffline();
+        }
+    }, 5000);
+
+    function triggerOffline() {
+        isSystemDown = true;
+        document.getElementById('conn-dot').className = "dot dot-offline";
+        document.getElementById('conn-text').innerText = "Status: Perangkat Offline";
+        
+        document.getElementById('co2-val').innerHTML = `0 <span class="unit">PPM</span>`;
+        document.getElementById('pm-val').innerHTML = `0 <span class="unit">µg/m³</span>`;
+        document.getElementById('co2-val').classList.add('offline-text');
+        document.getElementById('pm-val').classList.add('offline-text');
+        
+        document.getElementById('co2-status').innerText = "OFFLINE";
+        document.getElementById('pm-status').innerText = "OFFLINE";
     }
 
-    function triggerNotify(title, msg) {
-        if (Notification.permission === "granted") {
-            new Notification(title, {
-                body: msg,
-                icon: "https://cdn-icons-png.flaticon.com/512/1684/1684426.png"
-            });
-        }
-    }
+    // --- INISIALISASI MONITORING ---
+    function init() {
+        initChart();
 
-    // --- 3. CHART SETUP ---
-    const ctx = document.getElementById('airChart').getContext('2d');
-    const airChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                { label: 'CO2', borderColor: '#38bdf8', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(56, 189, 248, 0.1)' },
-                { label: 'PM2.5', borderColor: '#fb923c', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(251, 146, 60, 0.1)' }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
-                x: { grid: { display: false }, ticks: { color: '#64748b' } }
-            },
-            plugins: { legend: { labels: { color: '#94a3b8' } } }
-        }
-    });
+        // Mengambil data dari path 'monitoring' secara Realtime
+        db.ref('monitoring').on('value', snapshot => {
+            if (!snapshot.exists()) {
+                document.getElementById('conn-text').innerText = "Database Kosong";
+                return;
+            }
 
-    // --- 4. REAL-TIME DATA LISTENER ---
-    // Kita memantau path 'monitoring' (pastikan di Firebase sudah huruf kecil)
-    db.ref('monitoring').limitToLast(15).on('value', (snapshot) => {
-        if (snapshot.exists()) {
-            document.getElementById('connection-text').innerText = "Sistem Online";
-            const labels = [];
-            const co2Data = [];
-            const pmData = [];
+            lastActive = Date.now();
+            isSystemDown = false;
+            document.getElementById('conn-dot').className = "dot dot-online";
+            document.getElementById('conn-text').innerText = "Status: Terhubung (Online)";
+            document.getElementById('co2-val').classList.remove('offline-text');
+            document.getElementById('pm-val').classList.remove('offline-text');
 
-            snapshot.forEach((child) => {
+            const labels = [], co2s = [], pms = [];
+            excelBuffer = []; // Reset buffer setiap ada pembaruan agar data di Excel akurat
+
+            snapshot.forEach(child => {
                 const data = child.val();
                 
-                // Ambil waktu dari timestamp atau gunakan waktu sekarang jika tidak ada
-                const time = data.timestamp ? 
-                    new Date(Number(data.timestamp)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
-                    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                // Konversi waktu dari ESP32 atau sistem ke format lokal Indonesia
+                // Kita gunakan objek Date agar di Excel muncul Tanggal & Jam terpisah
+                const now = new Date();
+                const tgl = now.toLocaleDateString('id-ID');
+                const jam = now.toLocaleTimeString('id-ID');
 
-                labels.push(time);
-                co2Data.push(data.co2 || 0);
-                pmData.push(data.pm25 || 0);
+                // Masukkan ke penampung Excel
+                excelBuffer.push({
+                    "Tanggal": tgl,
+                    "Jam": jam,
+                    "CO2 (PPM)": Math.round(data.co2),
+                    "PM2.5 (ug/m3)": Math.round(data.pm25),
+                    "Status": (data.co2 > 1000 || data.pm25 > 35) ? "BURUK" : "BAIK"
+                });
 
-                // Update UI Per Card
-                updateDisplay('co2', data.co2 || 0);
-                updateDisplay('pm', data.pm25 || 0);
+                // Penampung Grafik
+                labels.push(jam.substring(0, 5)); // Ambil HH:MM saja
+                co2s.push(data.co2);
+                pms.push(data.pm25);
 
-                // Cek Notifikasi
-                handleAlerts(data.co2 || 0, data.pm25 || 0);
+                // Update Angka di Card
+                updateDisplay('co2', data.co2);
+                updateDisplay('pm', data.pm25);
             });
 
-            airChart.data.labels = labels;
-            airChart.data.datasets[0].data = co2Data;
-            airChart.data.datasets[1].data = pmData;
-            airChart.update();
-        }
-    });
+            // Update Grafik (Tampilkan 20 data terbaru)
+            chart.data.labels = labels.slice(-20);
+            chart.data.datasets[0].data = co2s.slice(-20);
+            chart.data.datasets[1].data = pms.slice(-20);
+            chart.update();
+        });
+    }
 
     function updateDisplay(type, val) {
-        const valEl = document.getElementById(type + '-val');
+        const valueEl = document.getElementById(type + '-val');
         const statusEl = document.getElementById(type + '-status');
+        const limit = (type === 'co2') ? 1000 : 35;
+        const unit = (type === 'co2') ? 'PPM' : 'µg/m³';
+
+        valueEl.innerHTML = `${Math.round(val)} <span class="unit">${unit}</span>`;
         
-        if (type === 'co2') {
-            valEl.innerHTML = `${val} <span class="unit">PPM</span>`;
-            if (val < 1000) { valEl.className = "value good"; statusEl.innerText = "SEHAT"; }
-            else if (val < 1500) { valEl.className = "value alert"; statusEl.innerText = "WASPADA"; }
-            else { valEl.className = "value critical"; statusEl.innerText = "BAHAYA"; }
+        if (val > limit) {
+            valueEl.className = "value critical";
+            statusEl.innerText = "KONDISI BURUK";
+            statusEl.style.color = "var(--danger)";
         } else {
-            valEl.innerHTML = `${val} <span class="unit">µg/m³</span>`;
-            if (val < 12) { valEl.className = "value good"; statusEl.innerText = "BERSIH"; }
-            else if (val < 35) { valEl.className = "value alert"; statusEl.innerText = "SEDANG"; }
-            else { valEl.className = "value critical"; statusEl.innerText = "BURUK"; }
+            valueEl.className = "value good";
+            statusEl.innerText = "KONDISI SEHAT";
+            statusEl.style.color = "var(--success)";
         }
     }
 
-    function handleAlerts(co2, pm) {
-        if (co2 > 1200 && !co2AlertSent) {
-            triggerNotify("⚠️ Bahaya CO2!", `Kadar CO2 tinggi: ${co2} PPM.`);
-            co2AlertSent = true;
-        } else if (co2 <= 1000) { co2AlertSent = false; }
-
-        if (pm > 35 && !pm25AlertSent) {
-            triggerNotify("😷 Polusi Udara!", `Kadar PM2.5 buruk: ${pm} µg/m³.`);
-            pm25AlertSent = true;
-        } else if (pm <= 30) { pm25AlertSent = false; }
+    function initChart() {
+        const ctx = document.getElementById('airChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'CO2', borderColor: '#38bdf8', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(56, 189, 248, 0.1)' },
+                { label: 'PM2.5', borderColor: '#fb923c', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(251, 146, 60, 0.1)' }
+            ]},
+            options: { 
+                responsive: true, maintainAspectRatio: false,
+                scales: { 
+                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                    x: { ticks: { color: '#64748b' } }
+                }
+            }
+        });
     }
+
+    // --- FUNGSI CETAK EXCEL ---
+    function exportToExcel() {
+        if (excelBuffer.length === 0) {
+            alert("Tidak ada data untuk dicetak!");
+            return;
+        }
+
+        // Membuat Worksheet
+        const ws = XLSX.utils.json_to_sheet(excelBuffer);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Hasil Monitoring");
+
+        // Nama file sesuai tanggal saat ini
+        const d = new Date();
+        const namaFile = `Laporan_AirQuality_${d.getDate()}-${d.getMonth()+1}-${d.getFullYear()}.xlsx`;
+
+        // Proses download
+        XLSX.writeFile(wb, namaFile);
+    }
+
+    init();
 </script>
 </body>
 </html>
